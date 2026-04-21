@@ -81,15 +81,13 @@ class ParametrosSistema:
     inventario_producto_terminado: bool = False
     max_backlog_pedidos:          int   = 30
 
-    # Participaciones reales obtenidas de los últimos 12 meses del notebook
-    # (Mar 2025 - Feb 2026). Total observado = 100%.
     participacion_productos: dict = field(default_factory=lambda: {
-        Producto.NUDOS_PROTECCION:     0.2801,   # 7 Nudos de Protección
-        Producto.NUDOS_SAN_BENITO:     0.2337,   # 7 Nudos San Benito
-        Producto.NUDOS_COLORES:        0.1730,   # 7 Nudos Colores
-        Producto.DECENARIO_SAN_BENITO: 0.1446,   # Decenarios San Benito
-        Producto.BRAZALETE_TIBETANO:   0.1213,   # Tibetanas - Buena Suerte
-        Producto.NUDOS_TIBETANO:       0.0472,   # 7 nudos Tibetano
+        Producto.NUDOS_PROTECCION:     0.28,
+        Producto.DECENARIO_SAN_BENITO: 0.23,
+        Producto.BRAZALETE_TIBETANO:   0.18,
+        Producto.NUDOS_SAN_BENITO:     0.16,
+        Producto.NUDOS_TIBETANO:       0.10,
+        Producto.NUDOS_COLORES:        0.06,
     })
 
     factores_estacionales: dict = field(default_factory=lambda: {
@@ -112,68 +110,22 @@ PARAMS_SISTEMA = ParametrosSistema()
 
 # ============================================================
 # PRONÓSTICO BASE HOLT-WINTERS (marzo 2026 - febrero 2027)
-# Valores reales obtenidos del notebook v3 con HW multiplicativo
-# Training: Mar 2023 - Feb 2025 (24 meses)
-# Validación: Mar 2025 - Feb 2026 (12 meses) → MAPE 18.66%
+# Valores obtenidos del notebook con HW multiplicativo
 # ============================================================
 
 FORECAST_FAMILIA: Dict[pd.Timestamp, int] = {
-    pd.Timestamp("2026-03-01"):  99,
-    pd.Timestamp("2026-04-01"):  87,
-    pd.Timestamp("2026-05-01"):  78,
-    pd.Timestamp("2026-06-01"):  78,
-    pd.Timestamp("2026-07-01"):  95,
-    pd.Timestamp("2026-08-01"): 130,
-    pd.Timestamp("2026-09-01"): 108,
-    pd.Timestamp("2026-10-01"):  95,
-    pd.Timestamp("2026-11-01"): 112,
-    pd.Timestamp("2026-12-01"): 190,
-    pd.Timestamp("2027-01-01"): 147,
-    pd.Timestamp("2027-02-01"): 117,
-}
-
-# ============================================================
-# MÉTRICAS DE VALIDACIÓN DEL MODELO (notebook v3)
-# Train: 24 meses | Test: 12 meses
-# ============================================================
-
-METRICAS_HW = {
-    "HW_Multiplicativo": {
-        "MAD": 18.06, "MSE": 566.16, "RMSE": 23.79,
-        "MAPE": 18.66, "RSFE": -29.31, "TS": -1.62,
-        "sesgo": False,
-    },
-    "HW_Aditivo": {
-        "MAD": 19.58, "MSE": 630.70, "RMSE": 25.11,
-        "MAPE": 20.72, "RSFE": -109.99, "TS": -5.62,
-        "sesgo": True,
-    },
-}
-
-# ============================================================
-# SERIE HISTÓRICA REAL (Mar 2023 - Feb 2026)
-# 36 meses · Total 4,000 unidades · Media 111.1 · Std 37.0
-# ============================================================
-
-HISTORICO_FAMILIA: Dict[pd.Timestamp, int] = {
-    pd.Timestamp("2023-03-01"):  89, pd.Timestamp("2023-04-01"):  95,
-    pd.Timestamp("2023-05-01"):  83, pd.Timestamp("2023-06-01"):  57,
-    pd.Timestamp("2023-07-01"):  91, pd.Timestamp("2023-08-01"): 172,
-    pd.Timestamp("2023-09-01"): 109, pd.Timestamp("2023-10-01"):  50,
-    pd.Timestamp("2023-11-01"):  73, pd.Timestamp("2023-12-01"): 202,
-    pd.Timestamp("2024-01-01"): 148, pd.Timestamp("2024-02-01"): 126,
-    pd.Timestamp("2024-03-01"):  94, pd.Timestamp("2024-04-01"):  70,
-    pd.Timestamp("2024-05-01"):  83, pd.Timestamp("2024-06-01"):  97,
-    pd.Timestamp("2024-07-01"):  97, pd.Timestamp("2024-08-01"):  87,
-    pd.Timestamp("2024-09-01"): 141, pd.Timestamp("2024-10-01"): 117,
-    pd.Timestamp("2024-11-01"): 130, pd.Timestamp("2024-12-01"): 187,
-    pd.Timestamp("2025-01-01"): 142, pd.Timestamp("2025-02-01"): 125,
-    pd.Timestamp("2025-03-01"): 114, pd.Timestamp("2025-04-01"):  96,
-    pd.Timestamp("2025-05-01"):  66, pd.Timestamp("2025-06-01"):  80,
-    pd.Timestamp("2025-07-01"):  95, pd.Timestamp("2025-08-01"): 131,
-    pd.Timestamp("2025-09-01"):  74, pd.Timestamp("2025-10-01"): 118,
-    pd.Timestamp("2025-11-01"): 131, pd.Timestamp("2025-12-01"): 181,
-    pd.Timestamp("2026-01-01"): 150, pd.Timestamp("2026-02-01"):  99,
+    pd.Timestamp("2026-03-01"): 284,
+    pd.Timestamp("2026-04-01"): 251,
+    pd.Timestamp("2026-05-01"): 298,
+    pd.Timestamp("2026-06-01"): 221,
+    pd.Timestamp("2026-07-01"): 198,
+    pd.Timestamp("2026-08-01"): 175,
+    pd.Timestamp("2026-09-01"): 203,
+    pd.Timestamp("2026-10-01"): 181,
+    pd.Timestamp("2026-11-01"): 263,
+    pd.Timestamp("2026-12-01"): 341,
+    pd.Timestamp("2027-01-01"): 247,
+    pd.Timestamp("2027-02-01"): 312,
 }
 
 
