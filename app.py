@@ -202,11 +202,12 @@ st.markdown("---")
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📋 Estudio Preliminar",
     "📈 Pronóstico de Demanda",
     "🏭 Simulación Gemelo Digital",
     "🔍 Escenarios What-If & S&OP",
+    "🎯 Desagregación por Producto",
 ])
 
 
@@ -362,8 +363,10 @@ with tab2:
     st.header("Pronóstico de Demanda — Holt-Winters Multiplicativo")
     st.markdown(
         "Pronóstico obtenido del modelo **Holt-Winters multiplicativo** entrenado con "
-        "3 años de historia (Mar 2023 – Feb 2026) sobre la serie mensual agregada de la "
-        "familia Magic Spirit. Mejor MAPE frente al modelo aditivo en validación."
+        "36 meses de historia (Mar 2023 – Feb 2026) sobre la serie mensual agregada de "
+        "la familia Magic Spirit (6 SKUs · 4,000 unidades históricas). "
+        "Seleccionado sobre el aditivo en validación con **MAPE 18.66% vs 20.72%** "
+        "y tracking signal -1.62 (sin sesgo sistemático)."
     )
 
     # ── Forecast mensual ──
@@ -385,7 +388,50 @@ with tab2:
               f"{df_fcst['Unidades'].min()} uds")
     c4.metric("Promedio mensual", f"{df_fcst['Unidades'].mean():.0f} uds")
 
-    # ── Gráfica principal ──
+    # ── Gráfica histórico + forecast (serie completa) ──
+    from digital_twin import HISTORICO_FAMILIA
+
+    hist_dates = list(HISTORICO_FAMILIA.keys())
+    hist_vals  = list(HISTORICO_FAMILIA.values())
+    fcst_dates = list(forecast_ajustado.keys())
+    fcst_vals  = list(forecast_ajustado.values())
+
+    fig_hist = go.Figure()
+    fig_hist.add_trace(go.Scatter(
+        x=hist_dates, y=hist_vals,
+        mode="lines+markers", name="Histórico (36 meses)",
+        line=dict(color=COLORS["primary"], width=2.5),
+        marker=dict(size=5),
+    ))
+    # Línea puente que conecta el último punto histórico con el primer forecast
+    fig_hist.add_trace(go.Scatter(
+        x=[hist_dates[-1], fcst_dates[0]],
+        y=[hist_vals[-1],  fcst_vals[0]],
+        mode="lines",
+        line=dict(color=COLORS["secondary"], width=2, dash="dot"),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig_hist.add_trace(go.Scatter(
+        x=fcst_dates, y=fcst_vals,
+        mode="lines+markers", name="Forecast HW Mul (12 meses)",
+        line=dict(color=COLORS["secondary"], width=2.5, dash="dash"),
+        marker=dict(size=6, symbol="diamond"),
+    ))
+    fig_hist.add_vline(
+        x=hist_dates[-1], line_dash="dot", line_color="gray",
+        annotation_text="Hoy", annotation_position="top right",
+    )
+    fig_hist.update_layout(
+        title="Serie completa: Histórico (Mar 2023 – Feb 2026) + Pronóstico (Mar 2026 – Feb 2027)",
+        yaxis_title="Unidades/mes", xaxis_title="",
+        height=380, template="plotly_white",
+        legend=dict(orientation="h", y=-0.2),
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
+
+    st.markdown("### Pronóstico mensual detallado")
+
+    # ── Gráfica principal (barras por mes) ──
     colores_fcst = [
         COLORS["danger"]  if f >= 1.30 else
         COLORS["warning"] if f >= 1.10 else
@@ -451,23 +497,27 @@ with tab2:
     )
     st.plotly_chart(fig_stack, use_container_width=True)
 
-    with st.expander("📊 Métricas de desempeño del modelo (del notebook)"):
+    with st.expander("📊 Métricas de desempeño del modelo"):
         st.markdown(
             "El modelo **Holt-Winters multiplicativo** fue seleccionado sobre el aditivo "
             "al obtener menor error en el conjunto de validación (últimos 12 meses):"
         )
         df_metricas = pd.DataFrame({
-            "Modelo":   ["HW Multiplicativo", "HW Aditivo"],
-            "MAPE (%)": ["menor",             "mayor"],
-            "RMSE":     ["menor",             "mayor"],
-            "TS":       ["sin sesgo",         "sin sesgo"],
-            "Decisión": ["✅ Elegido",         "Descartado"],
+            "Modelo":          ["HW Multiplicativo", "HW Aditivo"],
+            "MAD":             [18.06,   19.58],
+            "RMSE":            [23.79,   25.11],
+            "MAPE (%)":        [18.66,   20.72],
+            "RSFE":            [-29.31,  -109.99],
+            "Tracking Signal": [-1.62,   -5.62],
+            "Diagnóstico":     ["✅ Sin sesgo sistemático", "⚠️ Sesgo negativo"],
         })
         st.dataframe(df_metricas, use_container_width=True, hide_index=True)
         st.caption(
-            "Los valores numéricos exactos están en el notebook original. "
-            "La estacionalidad marcada de la familia (diciembre ×1.40, febrero ×1.35) "
-            "favorece el modelo multiplicativo."
+            "**Train:** 24 meses (Mar 2023 – Feb 2025) · **Test:** 12 meses (Mar 2025 – Feb 2026). "
+            "La fuerte estacionalidad de la familia (diciembre ×1.40, febrero ×1.35) y el crecimiento "
+            "tendencial favorecen el modelo multiplicativo: su Tracking Signal cercano a cero confirma "
+            "que los errores positivos y negativos se compensan, mientras que el aditivo sobrestima "
+            "sistemáticamente (TS = -5.62)."
         )
 
 
@@ -658,6 +708,77 @@ with tab4:
         "throughput y costos operativos."
     )
 
+    # ── RESULTADOS REALES DEL NOTEBOOK (fuente: Proyecto_2_magic_spirit-3.ipynb) ──
+    st.markdown("### 📋 Resultados consolidados del estudio")
+    st.caption(
+        "Valores obtenidos de la ejecución del notebook completo con semilla fija. "
+        "Los 10 escenarios se muestran ordenados según se definieron en el análisis original."
+    )
+
+    resultados_notebook = pd.DataFrame([
+        {"Escenario": "E0 Base",                "Throughput": 2725, "Backlog máx": 81,  "% a tiempo": 97.3, "Cycle time (d)": 4.6,  "Util. emp (%)": 43.8, "Incumplidos": 427},
+        {"Escenario": "E1 Demanda +20%",        "Throughput": 3096, "Backlog máx": 249, "% a tiempo": 88.9, "Cycle time (d)": 10.0, "Util. emp (%)": 50.7, "Incumplidos": 832},
+        {"Escenario": "E2 Demanda -20%",        "Throughput": 2287, "Backlog máx": 27,  "% a tiempo": 100.0,"Cycle time (d)": 1.5,  "Util. emp (%)": 35.7, "Incumplidos": 0},
+        {"Escenario": "E3 Premium x2",          "Throughput": 2729, "Backlog máx": 85,  "% a tiempo": 97.2, "Cycle time (d)": 4.6,  "Util. emp (%)": 43.8, "Incumplidos": 400},
+        {"Escenario": "E4 Carga comerc. +15%",  "Throughput": 2725, "Backlog máx": 81,  "% a tiempo": 97.3, "Cycle time (d)": 4.6,  "Util. emp (%)": 52.0, "Incumplidos": 427},
+        {"Escenario": "E5 Sin horas extra",     "Throughput": 2724, "Backlog máx": 83,  "% a tiempo": 97.3, "Cycle time (d)": 4.7,  "Util. emp (%)": 61.4, "Incumplidos": 430},
+        {"Escenario": "E6 Lead time +7d",       "Throughput": 2725, "Backlog máx": 81,  "% a tiempo": 97.3, "Cycle time (d)": 4.6,  "Util. emp (%)": 43.8, "Incumplidos": 427},
+        {"Escenario": "E7 Stock hilo bajo",     "Throughput": 2725, "Backlog máx": 81,  "% a tiempo": 97.3, "Cycle time (d)": 4.6,  "Util. emp (%)": 43.8, "Incumplidos": 427},
+        {"Escenario": "E8 Combinado crítico",   "Throughput": 2980, "Backlog máx": 336, "% a tiempo": 85.6, "Cycle time (d)": 10.9, "Util. emp (%)": 77.3, "Incumplidos": 1005},
+        {"Escenario": "E9 Combinado favorable", "Throughput": 2725, "Backlog máx": 81,  "% a tiempo": 97.3, "Cycle time (d)": 4.6,  "Util. emp (%)": 43.8, "Incumplidos": 427},
+    ]).set_index("Escenario")
+
+    st.dataframe(
+        resultados_notebook.style.format({
+            "Throughput":     "{:,.0f}",
+            "Backlog máx":    "{:.0f}",
+            "% a tiempo":     "{:.1f}",
+            "Cycle time (d)": "{:.1f}",
+            "Util. emp (%)":  "{:.1f}",
+            "Incumplidos":    "{:,.0f}",
+        }),
+        use_container_width=True,
+    )
+
+    # ── Hallazgos clave ──
+    st.markdown("### 🎯 Hallazgos clave del análisis")
+    ch1, ch2, ch3 = st.columns(3)
+    ch1.success(
+        "**🏆 Mejor servicio**  \n"
+        "**E2 Demanda -20%**  \n"
+        "100% a tiempo · 0 incumplidos  \n"
+        "*Cuando baja la demanda, el sistema cumple perfecto*"
+    )
+    ch2.error(
+        "**🚨 Mayor backlog**  \n"
+        "**E8 Combinado crítico**  \n"
+        "336 pedidos · 1,005 incumplidos  \n"
+        "*Demanda +20% + sin HE = colapso operacional*"
+    )
+    ch3.warning(
+        "**📦 Mayor throughput**  \n"
+        "**E1 Demanda +20%**  \n"
+        "3,096 uds · 249 backlog máx  \n"
+        "*Más volumen pero servicio cae a 88.9%*"
+    )
+
+    st.info(
+        "**Insight principal para el S&OP:** los escenarios E4 (carga comercial +15%), "
+        "E5 (sin horas extra), E6 (lead time +7d), E7 (stock hilo bajo) y E9 (combinado favorable) "
+        "tienen prácticamente el mismo throughput y servicio que la base. Esto confirma que "
+        "**la palanca crítica del sistema es el manejo de la demanda**, no el inventario ni los "
+        "tiempos de reposición. Si la demanda se dispara +20% (E1), el servicio cae 8.4 puntos "
+        "porcentuales; si además se combina con otros estresores (E8), el sistema colapsa."
+    )
+
+    st.markdown("---")
+    st.markdown("### 🔬 Simulación interactiva (tu semilla y parámetros)")
+    st.caption(
+        f"Los siguientes resultados se recalculan en vivo con **seed = {seed}** y "
+        f"**demanda ajustada al multiplicador {demand_multiplier}**. "
+        "Pueden diferir de los valores consolidados de arriba."
+    )
+
     correr_wi = st.button(
         "▶️ Correr los 10 escenarios",
         type="primary",
@@ -713,7 +834,8 @@ with tab4:
             "HExtra (min)":     "{:,.0f}",
             "Escasez hilo":     "{:.0f}",
             "Compras emerg.":   "{:.0f}",
-        }),
+        }).background_gradient(subset=["% a tiempo"], cmap="RdYlGn", vmin=50, vmax=100)
+          .background_gradient(subset=["Backlog máx"], cmap="RdYlGn_r"),
         use_container_width=True,
     )
 
@@ -778,26 +900,179 @@ with tab4:
     st.plotly_chart(fig_bt, use_container_width=True)
 
     # ── Plan S&OP ──
-    st.markdown("### 📑 Plan S&OP derivado del análisis")
+    st.markdown("### 📑 Plan Agregado y Estrategia S&OP")
     with st.expander("Ver propuesta de plan agregado", expanded=True):
-        st.markdown(f"""
+        st.markdown("""
+**Contexto estratégico (Make-to-Order):**
+
+Dado que Magic Spirit opera bajo Make-to-Order, la estrategia agregada **no puede depender
+de inventario de producto terminado** — debe enfocarse en **capacidad efectiva y gestión de flujo**.
+Proponemos un enfoque pull controlado donde el número de pedidos procesados diariamente se ajusta
+a la capacidad real del sistema, particularmente en la etapa de empaque (cuello de botella).
+
 **Diagnóstico del escenario base (E0):**
-- Throughput de **{int(base_row['Uds empacadas']):,}** unidades en el año con **{base_row['% a tiempo']:.1f}%** de pedidos a tiempo.
-- Backlog máximo de **{int(base_row['Backlog máx'])}** pedidos — {'⚠️ por encima' if base_row['Backlog máx'] > PARAMS_SISTEMA.max_backlog_pedidos else '✅ dentro'} del límite operacional ({PARAMS_SISTEMA.max_backlog_pedidos}).
-- Utilización de empaque promedio de **{base_row['Util. emp (%)']:.1f}%** — es el cuello de botella confirmado.
+- Throughput de **2,725 unidades** en el año con **97.3%** de pedidos a tiempo.
+- Backlog máximo de **81 pedidos** — por encima del límite operacional de 30.
+- Utilización de empaque promedio de **43.8%** — holgura en meses valle.
 
-**Políticas recomendadas para el S&OP Mar 2026 – Feb 2027:**
+**Las 5 políticas del plan S&OP:**
 
-1. **Producción:** mantener la política MTO con priorización de pedidos premium en cola. Activar apoyo cruzado producción→empaque en días con cola de empaque > 3 pedidos.
+**1. Flujo pull controlado (Producción).** Los pedidos diarios se ajustan a la capacidad real
+del sistema, no al volumen nominal de la demanda. Esto evita acumulación en cola y mantiene
+cycle times predecibles.
 
-2. **Capacidad:** activar horas extra en empaque (+60 min/día) durante los meses declarados pico: **febrero, mayo, noviembre y diciembre**. El escenario E5 (sin horas extra) muestra cómo cae el servicio sin esta medida.
+**2. Horas extra estratégicas (Capacidad).** Activar 60 minutos adicionales/día en empaque
+durante picos: **febrero, mayo, noviembre y diciembre**. El escenario E5 muestra que desactivarlas
+no afecta el throughput anual pero **eleva la utilización al 61.4% vs 43.8% base** — el sistema
+queda sin margen. Esto no es contratación permanente, es expansión temporal.
 
-3. **Inventario de hilo rojo:** mantener stock inicial de al menos **3 rollos** y reorden de 3 rollos al caer a 1. El escenario E7 (stock inicial bajo) y E6 (lead time +7d) muestran riesgo de paros productivos. El escenario E9 con 15 rollos iniciales confirma que sobreaprovisionar es excesivo.
+**3. Priorización dual de pedidos (Servicio).** Distinguir entre pedidos **estándar (1–3 días)**
+y **premium (same-day)**. La priorización permite mejor asignación de capacidad limitada sin
+afectar significativamente el throughput global (E3 muestra impacto +0.1%).
 
-4. **Pricing/mix:** la propuesta de duplicar premium (E3) muestra impacto en cycle time por la priorización — revisar capacidad antes de agresivamente mover el mix comercial.
+**4. Backorders controlados (Demanda).** Durante saturación, aceptar backorders con plazos
+claramente comunicados al cliente en lugar de perder ventas. Es preferible al colapso E8
+donde se pierden 1,005 pedidos.
 
-5. **Señal de alarma:** si la demanda real se acerca a E1 (+20%) con la carga comercial actual +15% (E4), entramos en el escenario crítico E8 donde el sistema colapsa. Monitorear el throughput semanal contra el forecast para activar medidas correctivas tempranas.
+**5. Alineación marketing–operaciones (Integración comercial).** En Magic Spirit, la publicidad
+genera demanda directa. Las decisiones comerciales deben coordinarse con capacidad operativa.
+El escenario E8 muestra qué pasa si marketing dispara campañas sin esta alineación:
+backlog de **336 pedidos** y servicio cayendo a **85.6%**.
+
+**Señal de alarma operacional:** si el throughput semanal excede a la capacidad del plan
+durante más de 2 semanas consecutivas, activar protocolos de contención antes de entrar
+en zona E8.
         """)
+
+
+# ============================================================
+# TAB 5 - DESAGREGACIÓN POR PRODUCTO
+# ============================================================
+
+with tab5:
+    st.header("Desagregación Táctica — Por Producto y Mes")
+    st.markdown(
+        "Hasta aquí vimos resultados **agregados** del sistema. El verdadero valor del gemelo "
+        "digital está en bajar al nivel **táctico**: qué producto consume qué capacidad, cuándo, "
+        "y dónde se concentra el riesgo. Esto es lo que el equipo de S&OP necesita para "
+        "decisiones de ejecución día a día."
+    )
+
+    # ── Resumen anual por producto (del notebook, escenario E9) ──
+    st.markdown("### 📊 Resumen anual por producto")
+    st.caption(
+        "Datos del escenario E9 (Combinado favorable) — equivalente al plan S&OP recomendado. "
+        "Cálculos sobre 2,722 unidades despachadas en el año."
+    )
+
+    df_desagregacion = pd.DataFrame([
+        {"Producto": "7 Nudos de Protección",  "Uds producidas": 790, "Hilo (cm)": 63987,  "Horas-hombre": 102.7, "% Volumen": 30.4, "% Capacidad": 17.4},
+        {"Producto": "Decenario San Benito",   "Uds producidas": 586, "Hilo (cm)": 31644,  "Horas-hombre": 164.0, "% Volumen": 22.5, "% Capacidad": 27.8},
+        {"Producto": "Brazalete Tibetano",     "Uds producidas": 495, "Hilo (cm)": 102492, "Horas-hombre": 183.2, "% Volumen": 19.0, "% Capacidad": 31.0},
+        {"Producto": "7 Nudos San Benito",     "Uds producidas": 434, "Hilo (cm)": 36025,  "Horas-hombre":  60.8, "% Volumen": 16.7, "% Capacidad": 10.3},
+        {"Producto": "7 Nudos Tibetano",       "Uds producidas": 277, "Hilo (cm)": 26865,  "Horas-hombre":  44.6, "% Volumen": 10.6, "% Capacidad":  7.5},
+        {"Producto": "7 Nudos Colores",        "Uds producidas": 140, "Hilo (cm)": 11340,  "Horas-hombre":  23.9, "% Volumen":  5.4, "% Capacidad":  4.0},
+    ])
+
+    st.dataframe(
+        df_desagregacion.set_index("Producto").style.format({
+            "Uds producidas": "{:,.0f}",
+            "Hilo (cm)":      "{:,.0f}",
+            "Horas-hombre":   "{:.1f}",
+            "% Volumen":      "{:.1f}%",
+            "% Capacidad":    "{:.1f}%",
+        }),
+        use_container_width=True,
+    )
+
+    # ── Dos gráficas lado a lado: la "inversión" del ranking ──
+    st.markdown("### 🔄 La paradoja del volumen vs capacidad")
+    st.markdown(
+        "Cuando comparamos los mismos productos en dos métricas diferentes, **el ranking se invierte**. "
+        "Este es el hallazgo gerencial más importante de la desagregación."
+    )
+
+    col_g1, col_g2 = st.columns(2)
+
+    # Gráfica 1: Unidades producidas
+    df_sorted_uds = df_desagregacion.sort_values("Uds producidas", ascending=False)
+    fig_uds = go.Figure()
+    fig_uds.add_bar(
+        x=df_sorted_uds["Producto"],
+        y=df_sorted_uds["Uds producidas"],
+        marker_color=COLORS["primary"],
+        text=df_sorted_uds["Uds producidas"].astype(int),
+        textposition="outside",
+    )
+    fig_uds.update_layout(
+        title="Ranking por VOLUMEN (unidades/año)",
+        yaxis_title="Unidades",
+        height=380, template="plotly_white",
+        xaxis=dict(tickangle=-25),
+        showlegend=False,
+    )
+    col_g1.plotly_chart(fig_uds, use_container_width=True)
+
+    # Gráfica 2: Horas-hombre
+    df_sorted_hh = df_desagregacion.sort_values("Horas-hombre", ascending=False)
+    fig_hh = go.Figure()
+    fig_hh.add_bar(
+        x=df_sorted_hh["Producto"],
+        y=df_sorted_hh["Horas-hombre"],
+        marker_color=COLORS["secondary"],
+        text=df_sorted_hh["Horas-hombre"].round(1),
+        textposition="outside",
+    )
+    fig_hh.update_layout(
+        title="Ranking por CAPACIDAD (horas-hombre/año)",
+        yaxis_title="Horas-hombre",
+        height=380, template="plotly_white",
+        xaxis=dict(tickangle=-25),
+        showlegend=False,
+    )
+    col_g2.plotly_chart(fig_hh, use_container_width=True)
+
+    # ── Hallazgos gerenciales ──
+    st.markdown("### 💡 Implicaciones gerenciales")
+
+    c1, c2, c3 = st.columns(3)
+    c1.info(
+        "**🥇 7 Nudos de Protección**  \n"
+        "Líder en volumen (30.4%)  \n"
+        "pero apenas 17.4% de capacidad  \n"
+        "*Producto eficiente: alto volumen, bajo consumo relativo*"
+    )
+    c2.error(
+        "**⚠️ Brazalete Tibetano**  \n"
+        "Solo 19% del volumen  \n"
+        "pero 31% de la capacidad  \n"
+        "*Cada unidad toma 3× más tiempo (19.8 vs 7.8 min). Concentra 38% del hilo crítico.*"
+    )
+    c3.success(
+        "**📈 Palanca de escalamiento**  \n"
+        "Mix hacia productos  \n"
+        "de menor H-H/unidad  \n"
+        "*Triplica throughput con el mismo equipo*"
+    )
+
+    # ── Conexión con el plan S&OP ──
+    st.markdown("### 🔗 Conexión con el plan S&OP")
+    st.markdown("""
+Esta desagregación tiene **tres implicaciones concretas** para las políticas del plan agregado:
+
+1. **Stock de hilo rojo por producto.** El Brazalete Tibetano concentra el 38% del consumo de hilo.
+   La política de stock mínimo debe calibrarse priorizando este SKU — no es el mismo riesgo tener
+   escasez de hilo para un 7 Nudos (80 cm/ud) que para un Brazalete (207 cm/ud).
+
+2. **Priorización en cola de producción.** En diciembre (utilización empaque 94%),
+   la cola debe priorizar pedidos que maximicen throughput por H-H — es decir,
+   pedidos de productos "eficientes" tipo 7 Nudos de Protección antes que Brazaletes,
+   salvo los pedidos premium con plazo crítico.
+
+3. **Decisiones de pricing/mix comercial.** Si marketing quiere escalar ventas,
+   la palanca está en el mix: empujar productos de alta eficiencia (7 Nudos)
+   permite 3× más throughput con el mismo equipo vs empujar Brazaletes.
+    """)
 
 
 # ============================================================
